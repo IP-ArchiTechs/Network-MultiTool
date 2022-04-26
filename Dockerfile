@@ -1,8 +1,8 @@
-FROM alpine:3.13
+FROM alpine:3.12
 
-MAINTAINER Kamran Azeem & Henrik Høegh (kamranazeem@gmail.com, henrikrhoegh@gmail.com)
+MAINTAINER Kamran Azeem & Henrik Høegh (kaz@praqma.net, heh@praqma.net)
 
-EXPOSE 80 443 1180 11443
+EXPOSE 80 443
 
 # Install some tools in the container and generate self-signed SSL certificates.
 # Packages are listed in alphabetical order, for ease of readability and ease of maintenance.
@@ -12,52 +12,39 @@ RUN     apk update \
                 netcat-openbsd net-tools nginx nmap openssh-client openssl \
                 perl-net-telnet postgresql-client procps rsync socat tcpdump tshark wget \
                 openssh \
-    &&  mkdir /certs /docker \
+    &&  mkdir /certs \
     &&  chmod 700 /certs \
     &&  openssl req \
         -x509 -newkey rsa:2048 -nodes -days 3650 \
         -keyout /certs/server.key -out /certs/server.crt -subj '/CN=localhost'
 
 RUN echo 'PasswordAuthentication yes' >> /etc/ssh/sshd_config
+RUN echo 'PermitRootLogin yes' >> /etc/ssh/sshd_config
+RUN echo 'PermitEmptyPasswords yes' >> /etc/ssh/sshd_config
 
 RUN adduser -h /home/admin -s /bin/sh -D admin
 RUN echo -n 'admin:admin' | chpasswd
+RUN echo -n 'root:root' | chpasswd
 
 # Copy a simple index.html to eliminate text (index.html) noise which comes with default nginx image.
 # (I created an issue for this purpose here: https://github.com/nginxinc/docker-nginx/issues/234)
-
 COPY index.html /usr/share/nginx/html/
 
-COPY press-release.md /root/
-COPY press-release.html /root/
-
-
-# Copy a custom/simple nginx.conf which contains directives
-#   to redirected access_log and error_log to stdout and stderr.
-# Note: Don't use '/etc/nginx/conf.d/' directory for nginx virtual hosts anymore.
-#   This 'include' will be moved to the root context in Alpine 3.14.
-
+# Copy a custom nginx.conf with log files redirected to stderr and stdout
 COPY nginx.conf /etc/nginx/nginx.conf
 
-COPY entrypoint.sh /docker/entrypoint.sh
+COPY docker-entrypoint.sh /
+
+# Install gobgp
+RUN curl -LJO https://github.com/osrg/gobgp/releases/download/v3.1.0/gobgp_3.1.0_linux_amd64.tar.gz \
+    && tar -zxf gobgp_3.1.0_linux_amd64.tar.gz -C /usr/local/bin/ 
+
+# Run the startup script as ENTRYPOINT, which does few things and then starts nginx.
+ENTRYPOINT ["/docker-entrypoint.sh"]
 
 
 # Start nginx in foreground:
-CMD ["/usr/sbin/nginx", "-g", "daemon off;"]
-
-
-
-# Note: If you have not included the "bash" package, then it is "mandatory" to add "/bin/sh"
-#         in the ENTNRYPOINT instruction. 
-#       Otherwise you will get strange errors when you try to run the container. 
-#       Such as:
-#       standard_init_linux.go:219: exec user process caused: no such file or directory
-
-# Run the startup script as ENTRYPOINT, which does few things and then starts nginx.
-ENTRYPOINT ["/bin/sh", "/docker/entrypoint.sh"]
-
-
-
+CMD ["nginx", "-g", "daemon off;"]
 
 
 ###################################################################################################
@@ -83,9 +70,9 @@ ENTRYPOINT ["/bin/sh", "/docker/entrypoint.sh"]
 # OR
 # docker run -p 80:80 -p 443:443 -d  praqma/network-multitool
 # OR
-# docker run -e HTTP_PORT=1180 -e HTTPS_PORT=11443 -p 1180:1180 -p 11443:11443 -d  praqma/network-multitool
+# docker run -e HTTP_PORT=1080 -e HTTPS_PORT=1443 -p 1080:1080 -p 1443:1443 -d  praqma/network-multitool
 
 
 # Usage - on Kubernetes:
 # ---------------------
-# kubectl run multitool --image=praqma/network-multitool
+# kubectl run multitool --image=praqma/network-multitool --replicas=1
