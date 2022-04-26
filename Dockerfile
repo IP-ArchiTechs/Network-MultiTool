@@ -7,7 +7,7 @@ EXPOSE 80 443 1180 11443
 # Install some tools in the container and generate self-signed SSL certificates.
 # Packages are listed in alphabetical order, for ease of readability and ease of maintenance.
 RUN     apk update \
-    &&  apk add apk add apache2-utils bash bind-tools busybox-extras curl ethtool git \
+    &&  apk add apache2-utils bash bind-tools busybox-extras curl ethtool git \
                 iperf3 iproute2 iputils jq lftp mtr mysql-client \
                 netcat-openbsd net-tools nginx nmap openssh-client openssl \
                 perl-net-telnet postgresql-client procps rsync socat tcpdump tshark wget \
@@ -18,6 +18,10 @@ RUN     apk update \
         -x509 -newkey rsa:2048 -nodes -days 3650 \
         -keyout /certs/server.key -out /certs/server.crt -subj '/CN=localhost'
 
+RUN echo 'PasswordAuthentication yes' >> /etc/ssh/sshd_config
+
+RUN adduser -h /home/admin -s /bin/sh -D admin
+RUN echo -n 'admin:admin' | chpasswd
 
 # Copy a simple index.html to eliminate text (index.html) noise which comes with default nginx image.
 # (I created an issue for this purpose here: https://github.com/nginxinc/docker-nginx/issues/234)

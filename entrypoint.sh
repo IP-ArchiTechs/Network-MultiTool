@@ -32,6 +32,9 @@ else
 
 fi
 
+ssh-keygen -A
+exec /usr/sbin/sshd -D -e "$@"
+
 echo
 echo "========================= IMPORTANT =============================="
 echo
@@ -58,5 +61,5 @@ fi
 
 
 # Execute the command specified as CMD in Dockerfile:
-exec "$@"
+exec /usr/sbin/sshd -D -e "$@"
 
